@@ -1,5 +1,5 @@
 #include "Session.h"
-//#include <nlohmann/json.hpp>
+#include <nlohmann/json.hpp>
 #include <iostream>
 #include <boost/bind.hpp>
 
@@ -17,9 +17,9 @@ void Session::readMessage(const boost::system::error_code& error,
 						  size_t bytes)
 {
 	if (!error) {
-		std::string message(&buffer[0], &buffer[bytes]);
-		handleMessage(message);
-		reply = "Message sended back: " + message;
+		buffer[bytes] = '\0';
+
+		handleMessage();
 		
 		boost::asio::async_write(sock, asio::buffer(reply),
 								 boost::bind(&Session::sendMessage, shared_from_this(),
@@ -39,7 +39,21 @@ void Session::sendMessage(const boost::system::error_code& error)
 	}
 }
 
-void Session::handleMessage(const std::string& message)
+void Session::handleMessage()
 {
-	std::cout << "Message recieved: " << message << std::endl;
+	nlohmann::json request = nlohmann::json::parse(buffer);
+	try {
+		std::cout << "Message recieved: RequestType = "
+				  << request.at("RequestType")
+				  << ", UserID = " << request.at("UserID")
+				  << ", Message body = " << request.at("Message")
+				  << std::endl;
+	}
+	catch (const std::exception& e) {
+		std::cout << "Exeption occured while parsing json: " << e.what() << std::endl;
+	}
+
+	nlohmann::json jsonReply;
+	jsonReply["Message"] = "Message sended back: " + request.dump();
+	reply = jsonReply.dump();
 }

@@ -1,5 +1,6 @@
 #include "Client.h"
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -30,12 +31,21 @@ std::string Client::readMessage()
 {
     boost::asio::streambuf buff;
     boost::asio::read_until(sock, buff, "\0");
-    std::string message(std::istreambuf_iterator<char>(&buff), {});
+    
+    auto begin = boost::asio::buffers_begin(buff.data());
+    auto end = boost::asio::buffers_end(buff.data());
 
-    return message;
+    nlohmann::json message = nlohmann::json::parse(begin, end);
+    
+    return message["Message"];
 }
 
 void Client::sendMessage(const std::string& message)
 {
-    boost::asio::write(sock, boost::asio::buffer(message, message.size()));
+    nlohmann::json request;
+    request["RequestType"] = "Message";
+    request["UserID"] = clientID;
+    request["Message"] = message;
+    std::string req = request.dump();
+    boost::asio::write(sock, boost::asio::buffer(req, req.size()));
 }

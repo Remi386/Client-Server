@@ -22,7 +22,7 @@ private:
 
 	void sendMessage(const boost::system::error_code& error);
 
-	void handleMessage(const std::string& message);
+	void handleMessage();
 
 private:
 	std::string reply;
