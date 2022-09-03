@@ -1,8 +1,9 @@
 #pragma once
 #include <memory>
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
+#include <nlohmann/json.hpp>
 #include <string>
+#include "../NetCommon/NetCommon.h"
 
 inline constexpr int MAX_BUFFER_SIZE = 1024;
 
@@ -24,7 +25,17 @@ private:
 
 	void handleMessage();
 
+	void handleSignUp();
+
+	void handleSignIn(int64_t userID, const nlohmann::json& message);
+
+	void handleTradeRequest(int64_t userID, RequestType type, 
+							const nlohmann::json& message);
+
+	void handleInfoRequest(int64_t userID);
+
 private:
+	//We should keep reply buffer valid, so we will store data in string
 	std::string reply;
 	boost::asio::ip::tcp::socket sock;
 	char buffer[MAX_BUFFER_SIZE];

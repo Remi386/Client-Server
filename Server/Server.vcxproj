@@ -131,11 +131,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CompletedTradeRequest.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Marketplace.cpp" />
     <ClCompile Include="Session.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ClientInfo.h" />
+    <ClInclude Include="CompletedTradeRequest.h" />
+    <ClInclude Include="DataBase.h" />
+    <ClInclude Include="Marketplace.h" />
     <ClInclude Include="Session.h" />
+    <ClInclude Include="TradeRequest.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

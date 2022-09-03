@@ -14,7 +14,7 @@ public:
 		  acceptor_(context, tcp::endpoint(tcp::v4(), PORT_NUM))
 	{
         std::cout << "Server started! port:" << PORT_NUM << std::endl;
-
+      
         std::shared_ptr<Session> newSession = std::make_shared<Session>(context_);
 
         acceptor_.async_accept(newSession->socket(), 
@@ -47,6 +47,7 @@ private:
 	tcp::acceptor acceptor_;
 };
 
+
 int main()
 {
     try
@@ -64,3 +65,56 @@ int main()
 
     return 0;
 }
+
+//int main()
+//{
+//    {
+//        auto& market = Marketplace::instance();
+//        TradeRequest req1 = TradeRequest(0, 10, 62, TradeRequest::Type::Buy);
+//        market.handleTradeRequest(req1);
+//    }
+//    fun();
+//    {
+//        auto& market = Marketplace::instance();
+//        TradeRequest req2 = TradeRequest(1, 20, 63, TradeRequest::Type::Buy);
+//        market.handleTradeRequest(req2);
+//    }
+//
+//    {
+//        auto& market = Marketplace::instance();
+//        for (int i = 0; i < 3; ++i) {
+//            auto& clientRequests = market.getActiveRequests(i);
+//            
+//            std::cout << "Active requests for client" << i << "\n";
+//
+//            if (clientRequests.empty()) {
+//                std::cout << "No active requests\n";
+//            }
+//            else {
+//                for (auto& request : clientRequests) {
+//                    std::cout << request->toString() << std::endl;
+//                }
+//            }
+//        }
+//    }
+//
+//    {
+//        auto& market = Marketplace::instance();
+//        TradeRequest req3 = TradeRequest(2, 50, 61, TradeRequest::Type::Sell);
+//        market.handleTradeRequest(req3);
+//
+//        for (int i = 0; i < 3; ++i) {
+//            auto& clientRequests = market.getActiveRequests(i);
+//
+//            std::cout << "Active requests for client" << i << "\n";
+//            if (clientRequests.empty()) {
+//                std::cout << "No active requests\n";
+//            }
+//            else {
+//                for (auto& request : clientRequests) {
+//                    std::cout << request->toString() << std::endl;
+//                }
+//            }
+//        }
+//    }
+//}

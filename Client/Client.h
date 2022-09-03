@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include "../NetCommon/NetCommon.h"
+#include <nlohmann/json.hpp>
 
 class Client {
 public:
@@ -10,12 +11,14 @@ public:
 
 	void connect(const std::string& adress, const std::string& port);
 
-	std::string readMessage();
-
-	void sendMessage(const std::string& message);
+	void loop();
 
 private:
+	std::string readMessage();
+
+	void sendMessage(RequestType type, const nlohmann::json& message);
+
 	boost::asio::io_context context;
 	boost::asio::ip::tcp::socket sock;
-	uint32_t clientID;
+	int64_t clientID = -1;
 };
