@@ -17,5 +17,6 @@ enum class ResponseType : uint32_t
 	Registration,
 	RequestResponse,
 	ClientInfo,
+	Notification,
 	Error
 };

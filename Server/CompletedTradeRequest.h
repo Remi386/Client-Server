@@ -18,13 +18,7 @@ public:
 
 	TradeRequest::Type getType() const { return type; }
 
-	std::string toString() const
-	{
-		return std::string((type == TradeRequest::Type::Buy ? "Bought " : "Sold ")
-						   + std::to_string(volume) + " dollars with "
-						   + std::to_string(price) + " rubles price. PartnerID = "
-						   + std::to_string(otherUserID));
-	}
+	std::string toString() const;
 
 private:
 	int64_t volume;

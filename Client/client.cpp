@@ -3,6 +3,7 @@
 #include <iomanip>
 #include "../NetCommon/NetCommon.h"
 #include "Secure.h"
+#include <boost/bind.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -27,6 +28,16 @@ void Client::connect(const std::string& adress, const std::string& port)
         tcp::resolver::iterator iterator = resolver.resolve(query);
 
         sock.connect(*iterator);
+
+        //Register task
+        boost::asio::async_read_until(sock, buffer, "\n",
+            boost::bind(&Client::readMessage, this,
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+
+        //run context in another thread
+        clientThread = std::thread([this]() { context.run(); });
+
     }
     catch (std::exception& e) {
         std::cout << "Can not connect to server: " << e.what() << std::endl;
@@ -36,25 +47,39 @@ void Client::connect(const std::string& adress, const std::string& port)
     std::cout << "Connected to server, port:" << port << std::endl;
 }
 
-std::string Client::readMessage()
+void Client::readMessage(const boost::system::error_code& error,
+                                size_t bytes)
 {
-    boost::asio::streambuf buff;
-    boost::asio::read_until(sock, buff, "\0");
+    if (!error) {
 
-    auto begin = boost::asio::buffers_begin(buff.data());
-    auto end = boost::asio::buffers_end(buff.data());
-    //nlohmann::json response = nlohmann::json::parse(begin, end);
+        auto begin = boost::asio::buffers_begin(buffer.data());
+        auto end = boost::asio::buffers_end(buffer.data());
 
-    return std::string(begin, end);
+        nlohmann::json response = nlohmann::json::parse(begin, end);
+        
+        handleResponse(response);
+
+        buffer.consume(bytes);
+
+        boost::asio::async_read_until(sock, buffer, "\n",
+            boost::bind(&Client::readMessage, this,
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+        
+    }
 }
 
 void Client::sendMessage(RequestType type, const nlohmann::json& message)
 {
     nlohmann::json request;
+    
     request["RequestType"] = type;
     request["UserID"] = clientID;
     request["Message"] = message;
+    
     std::string req = request.dump();
+    req.push_back('\n'); //delimeter for messages
+
     boost::asio::write(sock, boost::asio::buffer(req, req.size()));
 }
 
@@ -74,16 +99,21 @@ void Client::loop()
                       << std::endl;
         }
         else if (option == "sign up") {
-            handleRegistration(RequestType::SignUp);
+            handleRegistrationRequest(RequestType::SignUp);
         }
         else if (option == "sign in") {
-            handleRegistration(RequestType::SignIn);
+            handleRegistrationRequest(RequestType::SignIn);
         }
         else if (option == "trade") {
             handleTradeRequest();
         }
         else if (option == "info") {
-            handleGetInfo();
+            if (clientID == -1) {
+                std::cout << "You are not signed in!" << std::endl;
+            }
+            else {
+                sendMessage(RequestType::GetInfo, "");
+            }
         }
         else if(option == "close")
         {
@@ -98,7 +128,7 @@ void Client::loop()
     }
 }
 
-void Client::handleRegistration(RequestType type)
+void Client::handleRegistrationRequest(RequestType type)
 {
     nlohmann::json message;
     std::string login, password;
@@ -113,43 +143,21 @@ void Client::handleRegistration(RequestType type)
     message["Password"] = secure::hashPassword(password);
 
     sendMessage(type, message);
-
-    std::string response = readMessage();
-
-    nlohmann::json res = nlohmann::json::parse(response);
-    bool status = res["Status"];
-    nlohmann::json serverMessage = res["Message"];
-
-    if (status) {
-        clientID = serverMessage["UserID"];
-        std::cout << "Got ID: " << clientID << std::endl;
-    }
-    else {
-        std::cout << "Registration failed: " << serverMessage["Info"] << std::endl;
-    }
 }
 
-void Client::handleGetInfo()
+void Client::handleGetInfoResponse(bool status, const nlohmann::json& message)
 {
-    if (clientID == -1) {
-        std::cout << "You are not signed in!" << std::endl;
-    }
-    else {
-        sendMessage(RequestType::GetInfo, "");
-        const nlohmann::json response = nlohmann::json::parse(readMessage());
-        bool status = response["Status"];
-
         if (!status) {
             std::cout << "Something went wrong: ";
-            std::cout << response["Message"]["Info"].get<std::string>() << std::endl;
+            std::cout << message["Info"].get<std::string>() << std::endl;
         }
         else {
-            auto& balance = response["Message"]["Balance"];
+            auto& balance = message["Balance"];
             
             std::cout << "Your balance: " << balance[0] << " dollars and "
                       << balance[1] << " rubles.\n";
 
-            auto activeRequest = response["Message"]["ActiveRequests"].get<std::list<std::string>>();
+            auto activeRequest = message["ActiveRequests"].get<std::list<std::string>>();
 
             if (!activeRequest.empty()) {
                 std::cout << "\nYour active requests: \n";
@@ -160,7 +168,7 @@ void Client::handleGetInfo()
                 }
             }
 
-            auto tradeHistory = response["Message"]["TradeHistory"].get<std::list<std::string>>();
+            auto tradeHistory = message["TradeHistory"].get<std::list<std::string>>();
 
             if (!tradeHistory.empty()) {
                 std::cout << "\nYour trade history: \n";
@@ -171,7 +179,6 @@ void Client::handleGetInfo()
                 }
             }
         }
-    }
 }
 
 void Client::handleTradeRequest()
@@ -209,12 +216,47 @@ void Client::handleTradeRequest()
     request["Price"] = price;
 
     sendMessage(RequestType::Request, request);
-
-    std::string response = readMessage();
-
-    nlohmann::json res = nlohmann::json::parse(response);
-    bool status = res["Status"];
-    nlohmann::json serverMessage = res["Message"];
-
-    std::cout << serverMessage["Info"].get<std::string>() << std::endl;
 }
+
+void Client::handleResponse(const nlohmann::json& response)
+{
+    ResponseType resType = response["ResponseType"];
+    bool status = response["Status"];
+    nlohmann::json message = response["Message"];
+
+    std::cout << "\nResponse received: \n";
+
+    switch (resType)
+    {
+    case ResponseType::Registration:
+        if (status) {
+            clientID = message["UserID"];
+            std::cout << "Got ID: " << clientID << std::endl;
+        }
+        else {
+            std::cout << "Registration failed: " 
+                      << message["Info"].get<std::string>() << std::endl;
+        }
+        break;
+
+    case ResponseType::Notification:
+        std::cout << "Recieved notification: " 
+                  << message["Info"].get<std::string>() << std::endl;
+        break;
+
+    case ResponseType::RequestResponse:
+        std::cout << message["Info"].get<std::string>() << std::endl;
+        break;
+
+    case ResponseType::ClientInfo:
+    {
+        handleGetInfoResponse(status, message);
+        break;
+    }
+    case ResponseType::Error:
+        std::cout << "Error occured: " 
+                  << message["Info"].get<std::string>() << std::endl;
+        break;
+    }
+}
+

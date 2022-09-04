@@ -1,5 +1,6 @@
 #include "Marketplace.h"
 #include "DataBase.h"
+#include "Session.h"
 
 void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 {
@@ -28,25 +29,43 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 				int64_t tradeVolume = std::min(iter->getVolume(), tradeRequest.getVolume());
 				int64_t rublesVolume = tradeVolume * iter->getPrice();
 
-				//Register trade between users
-				CompletedTradeRequest firstTrade(tradeVolume, iter->getPrice(),
-											     secondUserID, firstRequestType);
-
-				CompletedTradeRequest secondTrade(tradeVolume, iter->getPrice(),
-												  firstUserID, secondRequestType);
-
 				auto& db = DataBase::instance();
-				//Add trade to history
-				db.AddCompletedTradeRequest(firstUserID, firstTrade);
-				db.AddCompletedTradeRequest(secondUserID, secondTrade);
 
-				//change users balance
-				db.getClientInfo(firstUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-																  firstRequestType);
+				if (firstUserID != secondUserID) {
 
-				db.getClientInfo(secondUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-																   secondRequestType);
+					//Register trade between users
+					CompletedTradeRequest firstTrade(tradeVolume, iter->getPrice(),
+													 secondUserID, firstRequestType);
 
+					CompletedTradeRequest secondTrade(tradeVolume, iter->getPrice(),
+												      firstUserID, secondRequestType);
+
+
+					std::weak_ptr<Session> firstSession = getSession(firstUserID);
+					std::weak_ptr<Session> secondSession = getSession(secondUserID);
+
+					//Send notification to first user
+					if (auto fSession = firstSession.lock()) {
+						fSession->sendNotification(firstTrade.toString());
+					}
+
+					//Send notification to second user
+					if (auto sSession = secondSession.lock()) {
+						sSession->sendNotification(secondTrade.toString());
+					}
+
+					//Add trade to history
+					db.addCompletedTradeRequest(firstUserID, firstTrade);
+					db.addCompletedTradeRequest(secondUserID, secondTrade);
+
+					//change users balance
+					db.getClientInfo(firstUserID).applyBalanceChanges(tradeVolume, rublesVolume,
+						firstRequestType);
+
+					db.getClientInfo(secondUserID).applyBalanceChanges(tradeVolume, rublesVolume,
+						secondRequestType);
+
+				}
 				//Apply chages to trade request for further condition checks
 				iter->applyTrade(tradeVolume);
 				tradeRequest.applyTrade(tradeVolume);
@@ -106,7 +125,7 @@ void Marketplace::removeRequest(const TradeRequest& req, TradeRequest::Type reqT
 		clientRequests.erase(iter);
 	}
 
-	if (clientRequests.empty()) { //If client no longer have request
+	if (clientRequests.empty()) { //If client no longer have requests
 		activeRequests.erase(req.getOwner());
 	}
 
@@ -134,45 +153,3 @@ const Marketplace::listOfRequests&
 		return empty;
 	}
 }
-
-/*
-if (buyRequests.empty()) {
-			sellRequests.insert(tradeRequest);
-		}
-		else {
-			auto iter = buyRequests.begin();
-			auto end = buyRequests.end();
-			int64_t firstUserID = tradeRequest.getOwner();
-
-			while (iter != end || tradeRequest.getVolume() > 0)
-			{
-				int64_t secondUserID = iter->getOwner();
-
-				int64_t tradeVolume = std::min(iter->getVolume(), tradeRequest.getVolume());
-				int64_t rublesVolume = tradeVolume * iter->getPrice();
-
-				CompletedTradeRequest firstTrade(tradeVolume, iter->getPrice(),
-					secondUserID, TradeRequest::Type::Buy);
-
-				CompletedTradeRequest secondTrade(tradeVolume, iter->getPrice(),
-					firstUserID, TradeRequest::Type::Sell);
-
-				auto db = DataBase::instance();
-				db.AddCompletedTradeRequest(firstUserID, firstTrade);
-				db.AddCompletedTradeRequest(secondUserID, secondTrade);
-
-				db.getClientInfo(firstUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-					TradeRequest::Type::Buy);
-
-				db.getClientInfo(secondUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-					TradeRequest::Type::Sell);
-
-
-				iter->isCompleted() ? sellRequests.erase(iter++) : ++iter;
-			}
-
-			if (tradeRequest.getVolume() != 0) {
-				buyRequests.insert(tradeRequest);
-			}
-		}
-*/

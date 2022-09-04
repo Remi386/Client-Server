@@ -6,49 +6,125 @@
 #include "Marketplace.h"
 #include "DataBase.h"
 
+constexpr int MAX_BUFFER_SIZE = 1024;
+
 namespace asio = boost::asio;
 
 void Session::start()
 {
-	sock.async_receive(asio::buffer(buffer, MAX_BUFFER_SIZE),
-						 boost::bind(&Session::readMessage, shared_from_this(),
-									 asio::placeholders::error,
-									 asio::placeholders::bytes_transferred));
+	readMessageTask();
 }
 
-void Session::readMessage(const boost::system::error_code& error,
-						  size_t bytes)
+Session::~Session()
 {
-	if (!error) {
-		buffer[bytes] = '\0';
-
-		handleMessage();
-		
-		boost::asio::async_write(sock, asio::buffer(reply),
-								 boost::bind(&Session::sendMessage, shared_from_this(),
-											 asio::placeholders::error));
+	if (clientID >= 0) {
+		std::cout << "Removing session from active, ID = " << clientID << std::endl;
+		Marketplace::instance().removeSession(clientID);
 	}
 }
 
-void Session::sendMessage(const boost::system::error_code& error)
+void Session::readMessageTask()
+{
+	asio::async_read_until(sock, buffer, "\n", 
+						   boost::bind(&Session::readMessageHandler, shared_from_this(),
+									   asio::placeholders::error,
+									   asio::placeholders::bytes_transferred));
+}
+
+void Session::sendMessageTask()
+{
+	asio::async_write(sock, asio::buffer(reply),
+					  boost::bind(&Session::sendMessageHandler, shared_from_this(),
+								  asio::placeholders::error));
+}
+
+void Session::sendNotificationTask() 
+{
+	const std::string& messageRef = notificationBuffers.front();
+
+	asio::async_write(sock, asio::buffer(messageRef.c_str(), messageRef.size()),
+					  boost::bind(&Session::sendNotificationHandler,
+								  shared_from_this(), asio::placeholders::error));
+}
+
+void Session::addSessionToActive()
+{
+	std::cout << "Adding session to active, ID=" << clientID << std::endl;
+	Marketplace::instance().addSession(clientID, shared_from_this());
+}
+
+void Session::sendNotification(const std::string& content)
+{
+	//Prepare notification
+	nlohmann::json response;
+	nlohmann::json message;
+
+	response["ResponseType"] = ResponseType::Notification;
+	response["Status"] = true;
+	message["Info"] = content;
+	response["Message"] = message;
+
+	//Add notification to buffer
+	notificationBuffers.push_back(std::move(response.dump() + "\n"));
+
+	if (notificationBuffers.size() <= 1) {
+		//If size more than 1, then write sequence already started,
+		//No need to start another
+		sendNotificationTask();
+	}
+}
+
+void Session::sendNotificationHandler(const boost::system::error_code& error)
 {
 	if (!error) {
+		std::cout << "Sended notification, userID: " << clientID
+			<< ", message: " << notificationBuffers.front() << std::endl;
+
+		notificationBuffers.pop_front();
+
+		//Repeat sending notifications until buffer not empty
+		if (!notificationBuffers.empty()) {
+			sendNotificationTask();
+		}
+	}
+}
+
+void Session::readMessageHandler(const boost::system::error_code& error,
+						  size_t bytes)
+{
+	if (!error) {
+
+		handleMessage();
+		
+		//discard processed bytes from buffer
+		buffer.consume(bytes);
+
+		reply.push_back('\n'); //delimeter for messages
+
+		//Register send task when we done reading
+		sendMessageTask();
+	}
+}
+
+void Session::sendMessageHandler(const boost::system::error_code& error)
+{
+	if (!error) {
+
 		if(!reply.empty()) //If reply was empty, no message actually send
 			std::cout << "Sended message: " << reply << std::endl;
 
 		reply.clear(); //Message sended, so we can clear buffer
 
-		sock.async_receive(asio::buffer(buffer, MAX_BUFFER_SIZE),
-							boost::bind(&Session::readMessage, shared_from_this(),
-										asio::placeholders::error,
-										asio::placeholders::bytes_transferred));
+		//Register read task when we done sending
+		readMessageTask();
 	}
 }
 
 void Session::handleMessage()
 {
 	try {
-		nlohmann::json request = nlohmann::json::parse(buffer);
+		nlohmann::json request = nlohmann::json::parse(asio::buffers_begin(buffer.data()),
+													   asio::buffers_end(buffer.data()));
 
 		std::cout << "Got message: " << request << std::endl;
 
@@ -105,9 +181,11 @@ void Session::handleSignUp(const nlohmann::json& clientMessage)
 		message["Info"] = "This login already taken";
 
 	}
-	else {
+	else { //success
 		response["Status"] = true;
 		message["UserID"] = userID;
+		clientID = userID;
+		addSessionToActive();
 	}
 
 	response["Message"] = message;
@@ -133,9 +211,11 @@ void Session::handleSignIn(const nlohmann::json& clientMessage)
 		response["Status"] = false;
 		message["Info"] = "Incorrect password";
 	}
-	else {
+	else { //success
 		response["Status"] = true;
 		message["UserID"] = userID;
+		clientID = userID;
+		addSessionToActive();
 	}
 
 	response["Message"] = message;

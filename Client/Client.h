@@ -1,9 +1,9 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <string>
-#include <cstdint>
-#include "../NetCommon/NetCommon.h"
 #include <nlohmann/json.hpp>
+#include <thread>
+#include "../NetCommon/NetCommon.h"
 
 class Client {
 public:
@@ -14,17 +14,23 @@ public:
 	void loop();
 
 private:
-	std::string readMessage();
+	void readMessage(const boost::system::error_code& error,
+					 size_t bytes);
 
 	void sendMessage(RequestType type, const nlohmann::json& message);
 
-	void handleRegistration(RequestType type);
+	void handleRegistrationRequest(RequestType type);
 
 	void handleTradeRequest();
 
-	void handleGetInfo();
+	void handleResponse(const nlohmann::json& response);
 
+	void handleGetInfoResponse(bool status, const nlohmann::json& message);
+
+	std::thread clientThread;
 	boost::asio::io_context context;
 	boost::asio::ip::tcp::socket sock;
 	int64_t clientID = -1;
+	//std::string buffer;
+	boost::asio::streambuf buffer;
 };

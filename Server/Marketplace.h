@@ -1,8 +1,11 @@
 #pragma once
 #include <set>
 #include <list>
-#include <map>
+#include <unordered_map>
 #include "TradeRequest.h"
+#include <memory>
+
+class Session;
 
 class Marketplace {
 public:
@@ -23,6 +26,26 @@ public:
 
 	const listOfRequests& getActiveRequests(int64_t userID);
 
+	std::weak_ptr<Session> getSession(int64_t userID)
+	{
+		if (activeSessions.find(userID) != activeSessions.end())
+			return activeSessions[userID];
+
+		return std::weak_ptr<Session>();
+	}
+
+	void addSession(int64_t userID, std::weak_ptr<Session> session)
+	{
+		if (activeSessions.find(userID) == activeSessions.end())
+			activeSessions.emplace(userID, session);
+	}
+
+	void removeSession(int64_t userID)
+	{
+		if (activeSessions.find(userID) != activeSessions.end())
+			activeSessions.erase(userID);
+	}
+
 private:
 
 	void addRequest(TradeRequest& req, TradeRequest::Type reqType);
@@ -33,5 +56,7 @@ private:
 
 	std::multiset<TradeRequest, TradeRequestAscendingComparator> buyRequests;
 	std::multiset<TradeRequest, TradeRequestDescendingComparator> sellRequests;
-	std::map<int64_t, listOfRequests> activeRequests;
+	
+	std::unordered_map<int64_t, listOfRequests> activeRequests;
+	std::unordered_map<int64_t, std::weak_ptr<Session>> activeSessions;
 };
