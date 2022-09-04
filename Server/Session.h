@@ -25,9 +25,9 @@ private:
 
 	void handleMessage();
 
-	void handleSignUp();
+	void handleSignUp(const nlohmann::json& message);
 
-	void handleSignIn(int64_t userID, const nlohmann::json& message);
+	void handleSignIn(const nlohmann::json& message);
 
 	void handleTradeRequest(int64_t userID, RequestType type, 
 							const nlohmann::json& message);

@@ -1,8 +1,17 @@
 #include "Client.h"
 #include <iostream>
+#include <iomanip>
 #include "../NetCommon/NetCommon.h"
+#include "Secure.h"
 
 using boost::asio::ip::tcp;
+
+//Helper function tolower case strings
+void to_lower(std::string& str)
+{
+    std::transform(str.begin(), str.end(), str.begin(),
+        [](char ch) {return std::tolower(ch); });
+}
 
 Client::Client()
 : context(), sock(context)
@@ -34,8 +43,8 @@ std::string Client::readMessage()
 
     auto begin = boost::asio::buffers_begin(buff.data());
     auto end = boost::asio::buffers_end(buff.data());
-    //nlohmann::json message = nlohmann::json::parse(begin, end);
-    
+    //nlohmann::json response = nlohmann::json::parse(begin, end);
+
     return std::string(begin, end);
 }
 
@@ -51,12 +60,6 @@ void Client::sendMessage(RequestType type, const nlohmann::json& message)
 
 void Client::loop()
 {
-    auto to_lower = [](std::string& str) 
-    {
-        std::transform(str.begin(), str.end(), str.begin(), 
-            [](char ch) {return std::tolower(ch); });
-    };
-    
     bool running = true;
     while (running && sock.is_open()) 
     {
@@ -67,63 +70,20 @@ void Client::loop()
         to_lower(option);
 
         if (option == "help") {
-            std::cout << "Possible commands: sign up, trade, info, close" 
+            std::cout << "Possible commands: sign up, sign in, trade, info, close" 
                       << std::endl;
         }
         else if (option == "sign up") {
-            sendMessage(RequestType::SignUp, "");
-            
-            std::string response = readMessage();
-            std::cout << "Got message: " << response << std::endl;
-            
-            nlohmann::json res = nlohmann::json::parse(response);
-            int64_t userID = res.at("UserID");
-
-            std::cout << "Your ID: " << userID << std::endl;
-            clientID = userID;
+            handleRegistration(RequestType::SignUp);
+        }
+        else if (option == "sign in") {
+            handleRegistration(RequestType::SignIn);
         }
         else if (option == "trade") {
-
-            if (clientID < 0) {
-                std::cout << "You are not signed in!" << std::endl;
-                continue;
-            }
-
-            nlohmann::json request;
-            std::string temp;
-            do {
-                std::cout << "Enter type of operation, 'buy' or 'sell' ('exit'): ";
-                std::getline(std::cin, temp);
-                to_lower(option);
-            } while (temp != "buy" && temp != "sell" && temp != "exit");
-            
-            if (temp == "exit")
-                continue;
-
-            /////////////////////////////Should remove/////////////////////////////////
-            request["TradeReqType"] = (temp == "buy") ? 0 : 1;
-
-            std::cout << "Enter trade volume: ";
-            std::getline(std::cin, temp);
-            int64_t volume = std::stoi(temp);
-            
-            std::cout << "Enter trade price: ";
-            std::getline(std::cin, temp);
-            int64_t price = std::stoi(temp);
-
-            request["Volume"] = volume;
-            request["Price"] = price;
-
-            sendMessage(RequestType::Request, request);
+            handleTradeRequest();
         }
         else if (option == "info") {
-            if (clientID < 0) {
-                std::cout << "You are not signed in!" << std::endl;
-                continue;
-            }
-            sendMessage(RequestType::GetInfo, "");
-            std::cout << readMessage() << std::endl;
-
+            handleGetInfo();
         }
         else if(option == "close")
         {
@@ -136,4 +96,125 @@ void Client::loop()
             continue;
         }
     }
+}
+
+void Client::handleRegistration(RequestType type)
+{
+    nlohmann::json message;
+    std::string login, password;
+
+    std::cout << "Enter login: ";
+    std::getline(std::cin, login);
+
+    std::cout << "Enter password: ";
+    std::getline(std::cin, password);
+    
+    message["Login"] = login;
+    message["Password"] = secure::hashPassword(password);
+
+    sendMessage(type, message);
+
+    std::string response = readMessage();
+
+    nlohmann::json res = nlohmann::json::parse(response);
+    bool status = res["Status"];
+    nlohmann::json serverMessage = res["Message"];
+
+    if (status) {
+        clientID = serverMessage["UserID"];
+        std::cout << "Got ID: " << clientID << std::endl;
+    }
+    else {
+        std::cout << "Registration failed: " << serverMessage["Info"] << std::endl;
+    }
+}
+
+void Client::handleGetInfo()
+{
+    if (clientID == -1) {
+        std::cout << "You are not signed in!" << std::endl;
+    }
+    else {
+        sendMessage(RequestType::GetInfo, "");
+        const nlohmann::json response = nlohmann::json::parse(readMessage());
+        bool status = response["Status"];
+
+        if (!status) {
+            std::cout << "Something went wrong: ";
+            std::cout << response["Message"]["Info"].get<std::string>() << std::endl;
+        }
+        else {
+            auto& balance = response["Message"]["Balance"];
+            
+            std::cout << "Your balance: " << balance[0] << " dollars and "
+                      << balance[1] << " rubles.\n";
+
+            auto activeRequest = response["Message"]["ActiveRequests"].get<std::list<std::string>>();
+
+            if (!activeRequest.empty()) {
+                std::cout << "\nYour active requests: \n";
+                int counter = 0;
+
+                for (auto& request : activeRequest) {
+                    std::cout << "\t" << ++counter << ") " << request << std::endl;
+                }
+            }
+
+            auto tradeHistory = response["Message"]["TradeHistory"].get<std::list<std::string>>();
+
+            if (!tradeHistory.empty()) {
+                std::cout << "\nYour trade history: \n";
+                int counter = 0;
+
+                for (auto& trade : tradeHistory) {
+                    std::cout << "\t" << ++counter << ") " << trade << std::endl;
+                }
+            }
+        }
+    }
+}
+
+void Client::handleTradeRequest()
+{
+    if (clientID < 0) {
+        std::cout << "You are not signed in!" << std::endl;
+        return;
+    }
+
+    nlohmann::json request;
+    std::string temp;
+
+    do {
+        std::cout << "Enter type of operation, 'buy' or 'sell' ('exit'): ";
+        std::getline(std::cin, temp);
+        to_lower(temp);
+
+    } while (temp != "buy" && temp != "sell" && temp != "exit");
+
+    if (temp == "exit")
+        return;
+
+    /////////////////////////////Should remove/////////////////////////////////
+    request["TradeReqType"] = (temp == "buy") ? 0 : 1;
+
+    std::cout << "Enter trade volume: ";
+    std::getline(std::cin, temp);
+    int64_t volume = std::stol(temp);
+
+    std::cout << "Enter trade price: ";
+    std::getline(std::cin, temp);
+    int64_t price = std::stol(temp);
+
+    request["Volume"] = volume;
+    request["Price"] = price;
+
+    sendMessage(RequestType::Request, request);
+
+    std::string response = readMessage();
+
+    nlohmann::json res = nlohmann::json::parse(response);
+    bool status = res["Status"];
+    nlohmann::json serverMessage = res["Message"];
+
+    std::cout << serverMessage["Info"].get<std::string>() << std::endl;
 }

@@ -11,3 +11,11 @@ enum class RequestType : uint32_t
 	GetInfo,
 	Close
 };
+
+enum class ResponseType : uint32_t
+{
+	Registration,
+	RequestResponse,
+	ClientInfo,
+	Error
+};

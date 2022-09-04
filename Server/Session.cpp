@@ -52,18 +52,18 @@ void Session::handleMessage()
 
 		std::cout << "Got message: " << request << std::endl;
 
-		auto reqType = request.at("RequestType").get<RequestType>();
-		auto userID = request.at("UserID").get<int64_t>();
-		auto message = request.at("Message");
+		RequestType reqType = request.at("RequestType");
+		int64_t userID = request.at("UserID");
+		nlohmann::json& message = request.at("Message");
 		
 		switch (reqType)
 		{
 		case RequestType::SignUp:
-			handleSignUp();
+			handleSignUp(message);
 			break;
 
 		case RequestType::SignIn:
-			handleSignIn(userID, message);
+			handleSignIn(message);
 			break;
 
 		case RequestType::Request:
@@ -85,63 +85,131 @@ void Session::handleMessage()
 	}
 	catch (const std::exception& e) {
 		std::cout << "Exeption occured while parsing json: " << e.what() << std::endl;
+		reply = "Some of json properties incorrect: " + std::string(e.what());
 	}
 }
 
-void Session::handleSignUp()
+void Session::handleSignUp(const nlohmann::json& clientMessage)
 {
 	nlohmann::json response;
-	response["UserID"] = DataBase::instance().registerNewUser();
+	nlohmann::json message;
+	std::string login = clientMessage.at("Login");
+	std::string password = clientMessage.at("Password");
+
+	response["ResponseType"] = ResponseType::Registration;
+	
+	int64_t userID = DataBase::instance().registerNewUser(login, password);
+
+	if (userID == -1) {
+		response["Status"] = false;
+		message["Info"] = "This login already taken";
+
+	}
+	else {
+		response["Status"] = true;
+		message["UserID"] = userID;
+	}
+
+	response["Message"] = message;
 	reply = response.dump();
 }
 
-void Session::handleSignIn(int64_t userID, const nlohmann::json& message)
+void Session::handleSignIn(const nlohmann::json& clientMessage)
 {
-	//Some password logic
+	nlohmann::json response;
+	nlohmann::json message;
+	std::string login = clientMessage.at("Login");
+	std::string password = clientMessage.at("Password");
+
+	response["ResponseType"] = ResponseType::Registration;
+
+	int64_t userID = DataBase::instance().getUserID(login, password);
+
+	if (userID == -1) {
+		response["Status"] = false;
+		message["Info"] = "This login doesn't exists";
+	}
+	else if (userID == -2) {
+		response["Status"] = false;
+		message["Info"] = "Incorrect password";
+	}
+	else {
+		response["Status"] = true;
+		message["UserID"] = userID;
+	}
+
+	response["Message"] = message;
+	reply = response.dump();
 }
 
 void Session::handleTradeRequest(int64_t userID, RequestType type,
-								 const nlohmann::json& message)
+								 const nlohmann::json& clientMessage)
 {
-	try {
-		auto volume = message.at("Volume").get<int64_t>();
-		auto price = message.at("Price").get<int64_t>();
-		auto reqType = message.at("TradeReqType").get<TradeRequest::Type>();
-		TradeRequest tradeRequest(userID, volume, price, reqType);
-		Marketplace::instance().handleTradeRequest(tradeRequest);
+	nlohmann::json response;
+	nlohmann::json message;
+
+	int64_t volume = clientMessage.at("Volume");
+	int64_t price = clientMessage.at("Price");
+	TradeRequest::Type reqType = clientMessage.at("TradeReqType");
+
+	if (volume <= 0 || price <= 0) {
+
+		response["ResponseType"] = ResponseType::RequestResponse;
+		response["Status"] = false;
+		message["Info"] = "Some of arguments incorrect, request denied";
+		response["Message"] = message;
+		reply = response.dump();
 	}
-	catch (const std::exception& e) {
-		reply = "Some of json properties missing: " + std::string(e.what());
+	else {
+		TradeRequest tradeRequest(userID, volume, price, reqType);
+
+		Marketplace::instance().handleTradeRequest(tradeRequest);
+
+		response["ResponseType"] = ResponseType::RequestResponse;
+		response["Status"] = true;
+		message["Info"] = "Trade request successfully registered";
+		response["Message"] = message;
+		reply = response.dump();
 	}
 }
 
 void Session::handleInfoRequest(int64_t userID)
 {
+	nlohmann::json response;
+	nlohmann::json message;
+	nlohmann::json activeRequests = nlohmann::json::array();
+	nlohmann::json tradeHistory = nlohmann::json::array();
+
 	DataBase& db = DataBase::instance();
 	Marketplace& market = Marketplace::instance();
-
+	
 	auto [dollars, rubles] = db.getClientInfo(userID).getBalance();
-	reply = "Your ID = " + std::to_string(userID) + ", balance = "
-		    + std::to_string(dollars) + " dollars, "
-		    + std::to_string(rubles) + " rubles.\n";
 
-	auto& activeRequests = market.getActiveRequests(userID);
+	message["Balance"] = nlohmann::json::array();
+	
+	message["Balance"].push_back(dollars);
+	message["Balance"].push_back(rubles);
 
-	if (!activeRequests.empty()) {
-		reply += "Active trade requests: ";
-		for (auto& request : activeRequests) {
-			reply += request->toString();
-			reply.push_back('\n');
-		}	
+	auto& activeRequestsList = market.getActiveRequests(userID);
+
+	if (!activeRequestsList.empty()) {
+		for (auto& request : activeRequestsList) {
+			activeRequests.push_back(request->toString());
+		}
 	}
 
 	auto& requestsHistory = db.getClientTradeHistory(userID);
 
 	if (!requestsHistory.empty()) {
-		reply += "Your trade history: ";
-		for (auto& complitedRequest : requestsHistory) {
-			reply += complitedRequest.toString();
-			reply.push_back('\n');
+		for (auto& request : requestsHistory) {
+			tradeHistory.push_back(request.toString());
 		}
 	}
+
+	response["ResponseType"] = ResponseType::ClientInfo;
+	response["Status"] = true;
+	message["ActiveRequests"] = activeRequests;
+	message["TradeHistory"] = tradeHistory;
+	response["Message"] = message;
+	reply = response.dump();
 }
