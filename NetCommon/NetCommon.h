@@ -7,8 +7,10 @@ enum class RequestType : uint32_t
 {
 	SignUp,
 	SignIn,
-	Request,
+	CreateRequest,
 	GetInfo,
+	GetQuotes,
+	CancelRequest,
 	Close
 };
 
@@ -17,6 +19,14 @@ enum class ResponseType : uint32_t
 	Registration,
 	RequestResponse,
 	ClientInfo,
-	Notification,
+	CancelInfo,
+	QuotesInfo,
+	RequestCompleted,
 	Error
+};
+
+enum class TradeRequestType : uint8_t
+{
+	Buy,
+	Sell
 };

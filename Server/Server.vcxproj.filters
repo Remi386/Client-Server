@@ -44,9 +44,6 @@
     <ClInclude Include="DataBase.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TradeRequest.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CompletedTradeRequest.h">
       <Filter>Header Files</Filter>
     </ClInclude>

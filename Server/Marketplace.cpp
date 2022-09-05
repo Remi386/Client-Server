@@ -4,13 +4,11 @@
 
 void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 {
-	using TradeType = TradeRequest::Type;
-
 	auto RequestHandler = [this](auto& requestContainer,  //Container simular to request, e.i. for buy request this is buyRequests container 
 								 auto& oppositeContainer, //Container opposite to request, e.i. for buy request this is sellRequests container 
 								 TradeRequest& tradeRequest, 
-								 TradeType firstRequestType,
-								 TradeType secondRequestType)
+								 TradeRequestType firstRequestType,
+								 TradeRequestType secondRequestType)
 	{ // lambda body
 		int64_t firstUserID = tradeRequest.getOwner();
 
@@ -31,14 +29,19 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 
 				auto& db = DataBase::instance();
 
-				if (firstUserID != secondUserID) {
+				//If two requests not from one user
+				if (firstUserID != secondUserID) { 
 
 					//Register trade between users
 					CompletedTradeRequest firstTrade(tradeVolume, iter->getPrice(),
-													 secondUserID, firstRequestType);
+													 secondUserID, 
+													 tradeRequest.getRegistrationTime(), 
+													 firstRequestType);
 
 					CompletedTradeRequest secondTrade(tradeVolume, iter->getPrice(),
-												      firstUserID, secondRequestType);
+												      firstUserID, 
+													  iter->getRegistrationTime(),
+													  secondRequestType);
 
 
 					std::weak_ptr<Session> firstSession = getSession(firstUserID);
@@ -89,25 +92,27 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 
 	switch (tradeRequest_.getType())
 	{
-	case TradeRequest::Type::Buy:
-		RequestHandler(buyRequests, sellRequests, tradeRequest_, TradeType::Buy, TradeType::Sell);
+	case TradeRequestType::Buy:
+		RequestHandler(buyRequests, sellRequests, tradeRequest_, 
+					   TradeRequestType::Buy, TradeRequestType::Sell);
 		break;
-	case TradeRequest::Type::Sell:
-		RequestHandler(sellRequests, buyRequests, tradeRequest_, TradeType::Sell, TradeType::Buy);
+	case TradeRequestType::Sell:
+		RequestHandler(sellRequests, buyRequests, tradeRequest_, 
+					   TradeRequestType::Sell, TradeRequestType::Buy);
 		break;
 	}
 }
 
-void Marketplace::addRequest(TradeRequest& req, TradeRequest::Type reqType)
+void Marketplace::addRequest(TradeRequest& req, TradeRequestType reqType)
 {
 	const TradeRequest* insertedValue;
 
 	switch (reqType)
 	{
-	case TradeRequest::Type::Buy:
+	case TradeRequestType::Buy:
 		insertedValue = &(*(buyRequests.insert(req)));
 		break;
-	case TradeRequest::Type::Sell:
+	case TradeRequestType::Sell:
 		insertedValue = &(*(sellRequests.insert(req)));
 		break;
 	}
@@ -115,12 +120,12 @@ void Marketplace::addRequest(TradeRequest& req, TradeRequest::Type reqType)
 	activeRequests[req.getOwner()].push_back(insertedValue);
 }
 
-void Marketplace::removeRequest(const TradeRequest& req, TradeRequest::Type reqType)
+void Marketplace::removeRequest(const TradeRequest& req, TradeRequestType reqType)
 {
 
 	listOfRequests& clientRequests = activeRequests.at(req.getOwner());
 	auto iter = std::find(clientRequests.begin(), clientRequests.end(), &req);
-	
+
 	if (iter != clientRequests.end()) {
 		clientRequests.erase(iter);
 	}
@@ -131,11 +136,24 @@ void Marketplace::removeRequest(const TradeRequest& req, TradeRequest::Type reqT
 
 	switch (reqType)
 	{
-	case TradeRequest::Type::Buy:
-		buyRequests.erase(req);
-		break;
-	case TradeRequest::Type::Sell:
-		sellRequests.erase(req);
+	case TradeRequestType::Buy:
+	{
+		auto iter = buyRequests.find(req);
+
+		if (iter != buyRequests.end()) {
+			buyRequests.erase(iter);
+			break;
+		}
+	}
+	case TradeRequestType::Sell:
+	{
+		auto iter = sellRequests.find(req);
+
+		if (iter != sellRequests.end()) {
+			sellRequests.erase(iter);
+			break;
+		}
+	}
 		break;
 	}
 }
@@ -152,4 +170,57 @@ const Marketplace::listOfRequests&
 										   //care about object lifetime
 		return empty;
 	}
+}
+
+bool Marketplace::cancelTradeRequest(const TradeRequest& req)
+{
+	auto client = activeRequests.find(req.getOwner());
+
+	if (client == activeRequests.end())
+		return false;
+
+	listOfRequests& clientRequests = client->second;
+
+	auto iter = std::find_if(clientRequests.begin(), clientRequests.end(),
+		[&](const TradeRequest* clientRequest) 
+		{
+			return req.getPrice() == clientRequest->getPrice()
+				&& req.getRegistrationTime() == clientRequest->getRegistrationTime();
+		});
+
+	if (iter == clientRequests.end()) {
+		return false;
+	}
+
+	clientRequests.erase(iter);
+
+	if (clientRequests.empty()) { //If client no longer have requests
+		activeRequests.erase(req.getOwner());
+	}
+
+	switch (req.getType())
+	{
+	case TradeRequestType::Buy:
+	{
+		auto iter = buyRequests.find(req);
+
+		if (iter != buyRequests.end()) {
+			buyRequests.erase(iter);
+			break;
+		}
+		return false;
+	}
+	case TradeRequestType::Sell:
+	{
+		auto iter = sellRequests.find(req);
+
+		if (iter != sellRequests.end()) {
+			sellRequests.erase(iter);
+			break;
+		}
+		return false;
+	}
+	}
+
+	return true;
 }

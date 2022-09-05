@@ -3,7 +3,9 @@
 #include <string>
 #include <nlohmann/json.hpp>
 #include <thread>
+#include <list>
 #include "../NetCommon/NetCommon.h"
+#include "../NetCommon/TradeRequest.h"
 
 class Client {
 public:
@@ -23,6 +25,8 @@ private:
 
 	void handleTradeRequest();
 
+	void handleCancelRequest();
+
 	void handleResponse(const nlohmann::json& response);
 
 	void handleGetInfoResponse(bool status, const nlohmann::json& message);
@@ -30,7 +34,8 @@ private:
 	std::thread clientThread;
 	boost::asio::io_context context;
 	boost::asio::ip::tcp::socket sock;
-	int64_t clientID = -1;
-	//std::string buffer;
 	boost::asio::streambuf buffer;
+	
+	int64_t clientID = -1;
+	std::list<TradeRequest> clientRequests;
 };

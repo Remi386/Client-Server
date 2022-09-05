@@ -4,6 +4,8 @@
 #include "../NetCommon/NetCommon.h"
 #include "Secure.h"
 #include <boost/bind.hpp>
+#include <boost/date_time.hpp>
+#include <boost/date_time/c_local_time_adjustor.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -95,8 +97,8 @@ void Client::loop()
         to_lower(option);
 
         if (option == "help") {
-            std::cout << "Possible commands: sign up, sign in, trade, info, close" 
-                      << std::endl;
+            std::cout << "Possible commands: sign up, sign in, "
+                         "trade, info, close, cancel"  << std::endl;
         }
         else if (option == "sign up") {
             handleRegistrationRequest(RequestType::SignUp);
@@ -106,6 +108,9 @@ void Client::loop()
         }
         else if (option == "trade") {
             handleTradeRequest();
+        }
+        else if (option == "cancel") {
+            handleCancelRequest();
         }
         else if (option == "info") {
             if (clientID == -1) {
@@ -119,11 +124,9 @@ void Client::loop()
         {
             std::cout << "Client stopped" << std::endl;
             running = false;
-            continue;
         }
         else {
             std::cout << "Unknown command: " << option << std::endl;
-            continue;
         }
     }
 }
@@ -145,40 +148,111 @@ void Client::handleRegistrationRequest(RequestType type)
     sendMessage(type, message);
 }
 
+void Client::handleCancelRequest()
+{
+    if (clientID < 0) {
+        std::cout << "You are not signed in!" << std::endl;
+        return;
+    }
+    if (clientRequests.empty()) {
+        std::cout << "You have no active trade requests."
+                     " Please, fetch information with 'info' command"  << std::endl;
+        return;
+    }
+
+    int index = -1;
+
+    while (true) {
+        std::cout << "Enter index of request to remove (count from 1): ";
+        std::cin >> index;
+
+        if (index - 1 >= 0 && index < clientRequests.size()) {
+            break;
+        }
+
+        std::cout << "Wrong value!" << std::endl;
+    }
+
+    auto iter = clientRequests.begin();
+    std::advance(iter, index);
+
+    nlohmann::json request = iter->createJsonObject();;
+    
+    sendMessage(RequestType::CancelRequest, request);
+}
+
 void Client::handleGetInfoResponse(bool status, const nlohmann::json& message)
 {
-        if (!status) {
-            std::cout << "Something went wrong: ";
-            std::cout << message["Info"].get<std::string>() << std::endl;
+    clientRequests.clear();
+
+    using local_adj = boost::date_time::c_local_adjustor<boost::posix_time::ptime>;
+    using namespace boost::posix_time;
+
+    if (!status) {
+        std::cout << "Something went wrong: ";
+        std::cout << message["Info"].get<std::string>() << std::endl;
+    }
+    else {
+        auto& balance = message["Balance"];
+            
+        std::cout << "Your balance: " << balance[0] << " dollars and "
+                    << balance[1] << " rubles.\n";
+
+        auto& activeRequest = message["ActiveRequests"];
+
+        if (activeRequest.empty())
+        {
+            std::cout << "\No active requests!\n";
         }
         else {
-            auto& balance = message["Balance"];
-            
-            std::cout << "Your balance: " << balance[0] << " dollars and "
-                      << balance[1] << " rubles.\n";
+            std::cout << "\nYour active requests: \n";
+            int counter = 0;
 
-            auto activeRequest = message["ActiveRequests"].get<std::list<std::string>>();
+            for (auto& request : activeRequest) {
 
-            if (!activeRequest.empty()) {
-                std::cout << "\nYour active requests: \n";
-                int counter = 0;
+                //Unpacking properties
+                std::string rTime = request["RegTime"];
+                ptime regTime = from_iso_extended_string(rTime);
 
-                for (auto& request : activeRequest) {
-                    std::cout << "\t" << ++counter << ") " << request << std::endl;
-                }
-            }
+                TradeRequestType type = request["Type"];
+                int64_t volume = request["Volume"];
+                int64_t price = request["Price"];
 
-            auto tradeHistory = message["TradeHistory"].get<std::list<std::string>>();
+                std::cout << "\t" << ++counter << ") " 
+                          << (type == TradeRequestType::Buy ? "Buying " : "Selling ")
+                          << volume << " dollars with "
+                          << price << " rubles price. Published on "
+                          << local_adj::utc_to_local(regTime) << std::endl;
 
-            if (!tradeHistory.empty()) {
-                std::cout << "\nYour trade history: \n";
-                int counter = 0;
 
-                for (auto& trade : tradeHistory) {
-                    std::cout << "\t" << ++counter << ") " << trade << std::endl;
-                }
+                clientRequests.push_back(TradeRequest(clientID, volume, price, 
+                                                      regTime, type));
+
             }
         }
+
+        auto& tradeHistory = message["TradeHistory"];
+
+        if (!tradeHistory.empty()) {
+            std::cout << "\nYour trade history: \n";
+            int counter = 0;
+
+            for (auto& trade : tradeHistory) {
+                std::string rTime = trade["RegTime"];
+                ptime regTime = from_iso_extended_string(rTime);
+
+                std::string cTime = trade["CloseTime"];
+                ptime closeTime = from_iso_extended_string(cTime);
+                    
+                std::cout << "\t" << ++counter << ") " 
+                          << (trade["Type"] == TradeRequestType::Buy ? "Bought " : "Sold ") 
+                          << trade["Volume"] << " dollars with " << trade["Price"] 
+                          <<  " rubles price. Published on " << local_adj::utc_to_local(regTime)
+                          << ", Closed on " << local_adj::utc_to_local(closeTime)
+                          << " PartnerID = " << trade["Partner"] << std::endl;
+            }
+        }
+    }
 }
 
 void Client::handleTradeRequest()
@@ -201,8 +275,7 @@ void Client::handleTradeRequest()
     if (temp == "exit")
         return;
 
-    /////////////////////////////Should remove/////////////////////////////////
-    request["TradeReqType"] = (temp == "buy") ? 0 : 1;
+    request["TradeReqType"] = (temp == "buy") ? TradeRequestType::Buy : TradeRequestType::Sell;
 
     std::cout << "Enter trade volume: ";
     std::getline(std::cin, temp);
@@ -215,7 +288,7 @@ void Client::handleTradeRequest()
     request["Volume"] = volume;
     request["Price"] = price;
 
-    sendMessage(RequestType::Request, request);
+    sendMessage(RequestType::CreateRequest, request);
 }
 
 void Client::handleResponse(const nlohmann::json& response)
@@ -239,12 +312,16 @@ void Client::handleResponse(const nlohmann::json& response)
         }
         break;
 
-    case ResponseType::Notification:
+    case ResponseType::RequestCompleted:
         std::cout << "Recieved notification: " 
                   << message["Info"].get<std::string>() << std::endl;
         break;
 
     case ResponseType::RequestResponse:
+        std::cout << message["Info"].get<std::string>() << std::endl;
+        break;
+
+    case ResponseType::CancelInfo:
         std::cout << message["Info"].get<std::string>() << std::endl;
         break;
 

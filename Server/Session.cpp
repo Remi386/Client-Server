@@ -1,7 +1,7 @@
 #include "Session.h"
 #include <iostream>
 #include <boost/bind.hpp>
-#include "TradeRequest.h"
+#include "../NetCommon/TradeRequest.h"
 #include "../NetCommon/NetCommon.h"
 #include "Marketplace.h"
 #include "DataBase.h"
@@ -59,7 +59,7 @@ void Session::sendNotification(const std::string& content)
 	nlohmann::json response;
 	nlohmann::json message;
 
-	response["ResponseType"] = ResponseType::Notification;
+	response["ResponseType"] = ResponseType::RequestCompleted;
 	response["Status"] = true;
 	message["Info"] = content;
 	response["Message"] = message;
@@ -98,8 +98,6 @@ void Session::readMessageHandler(const boost::system::error_code& error,
 		
 		//discard processed bytes from buffer
 		buffer.consume(bytes);
-
-		reply.push_back('\n'); //delimeter for messages
 
 		//Register send task when we done reading
 		sendMessageTask();
@@ -142,12 +140,15 @@ void Session::handleMessage()
 			handleSignIn(message);
 			break;
 
-		case RequestType::Request:
-			handleTradeRequest(userID, reqType, message);
+		case RequestType::CreateRequest:
+			handleTradeRequest(message);
 			break;
 
+		case RequestType::CancelRequest:
+			handleCancelRequest(message);
+			break;
 		case RequestType::GetInfo:
-			handleInfoRequest(userID);
+			handleInfoRequest();
 			break;
 
 		case RequestType::Close: //Close logic???
@@ -161,101 +162,89 @@ void Session::handleMessage()
 	}
 	catch (const std::exception& e) {
 		std::cout << "Exeption occured while parsing json: " << e.what() << std::endl;
-		reply = "Some of json properties incorrect: " + std::string(e.what());
+
+		nlohmann::json message;
+
+		message["Info"] = "Some of json properties incorrect: " + std::string(e.what());
+		createResponse(ResponseType::Error, false, std::move(message));
 	}
 }
 
 void Session::handleSignUp(const nlohmann::json& clientMessage)
 {
-	nlohmann::json response;
+	bool status = false;
 	nlohmann::json message;
 	std::string login = clientMessage.at("Login");
 	std::string password = clientMessage.at("Password");
 
-	response["ResponseType"] = ResponseType::Registration;
-	
 	int64_t userID = DataBase::instance().registerNewUser(login, password);
 
 	if (userID == -1) {
-		response["Status"] = false;
+		status = false;
 		message["Info"] = "This login already taken";
 
 	}
 	else { //success
-		response["Status"] = true;
+		status = true;
 		message["UserID"] = userID;
 		clientID = userID;
 		addSessionToActive();
 	}
 
-	response["Message"] = message;
-	reply = response.dump();
+	createResponse(ResponseType::Registration, status, std::move(message));
 }
 
 void Session::handleSignIn(const nlohmann::json& clientMessage)
 {
-	nlohmann::json response;
+	bool status = false;
 	nlohmann::json message;
 	std::string login = clientMessage.at("Login");
 	std::string password = clientMessage.at("Password");
 
-	response["ResponseType"] = ResponseType::Registration;
-
 	int64_t userID = DataBase::instance().getUserID(login, password);
 
 	if (userID == -1) {
-		response["Status"] = false;
+		status = false;
 		message["Info"] = "This login doesn't exists";
 	}
 	else if (userID == -2) {
-		response["Status"] = false;
+		status = false;
 		message["Info"] = "Incorrect password";
 	}
 	else { //success
-		response["Status"] = true;
+		status = true;
 		message["UserID"] = userID;
 		clientID = userID;
 		addSessionToActive();
 	}
 
-	response["Message"] = message;
-	reply = response.dump();
+	createResponse(ResponseType::Registration, status, std::move(message));
 }
 
-void Session::handleTradeRequest(int64_t userID, RequestType type,
-								 const nlohmann::json& clientMessage)
+void Session::handleTradeRequest(const nlohmann::json& clientMessage)
 {
-	nlohmann::json response;
 	nlohmann::json message;
 
 	int64_t volume = clientMessage.at("Volume");
 	int64_t price = clientMessage.at("Price");
-	TradeRequest::Type reqType = clientMessage.at("TradeReqType");
+	TradeRequestType reqType = clientMessage.at("TradeReqType");
 
 	if (volume <= 0 || price <= 0) {
-
-		response["ResponseType"] = ResponseType::RequestResponse;
-		response["Status"] = false;
 		message["Info"] = "Some of arguments incorrect, request denied";
-		response["Message"] = message;
-		reply = response.dump();
+		createResponse(ResponseType::RequestResponse, false, std::move(message));
 	}
 	else {
-		TradeRequest tradeRequest(userID, volume, price, reqType);
+		TradeRequest tradeRequest(clientID, volume, price, reqType);
 
 		Marketplace::instance().handleTradeRequest(tradeRequest);
 
-		response["ResponseType"] = ResponseType::RequestResponse;
-		response["Status"] = true;
 		message["Info"] = "Trade request successfully registered";
-		response["Message"] = message;
-		reply = response.dump();
+		createResponse(ResponseType::RequestResponse, true, std::move(message));
 	}
 }
 
-void Session::handleInfoRequest(int64_t userID)
+void Session::handleInfoRequest()
 {
-	nlohmann::json response;
 	nlohmann::json message;
 	nlohmann::json activeRequests = nlohmann::json::array();
 	nlohmann::json tradeHistory = nlohmann::json::array();
@@ -263,33 +252,68 @@ void Session::handleInfoRequest(int64_t userID)
 	DataBase& db = DataBase::instance();
 	Marketplace& market = Marketplace::instance();
 	
-	auto [dollars, rubles] = db.getClientInfo(userID).getBalance();
+	auto [dollars, rubles] = db.getClientInfo(clientID).getBalance();
 
 	message["Balance"] = nlohmann::json::array();
 	
 	message["Balance"].push_back(dollars);
 	message["Balance"].push_back(rubles);
 
-	auto& activeRequestsList = market.getActiveRequests(userID);
+	auto& activeRequestsList = market.getActiveRequests(clientID);
 
 	if (!activeRequestsList.empty()) {
 		for (auto& request : activeRequestsList) {
-			activeRequests.push_back(request->toString());
+			activeRequests.push_back(request->createJsonObject());
 		}
 	}
 
-	auto& requestsHistory = db.getClientTradeHistory(userID);
+	auto& requestsHistory = db.getClientTradeHistory(clientID);
 
 	if (!requestsHistory.empty()) {
 		for (auto& request : requestsHistory) {
-			tradeHistory.push_back(request.toString());
+			tradeHistory.push_back(request.createJsonObject());
 		}
 	}
 
-	response["ResponseType"] = ResponseType::ClientInfo;
-	response["Status"] = true;
 	message["ActiveRequests"] = activeRequests;
 	message["TradeHistory"] = tradeHistory;
-	response["Message"] = message;
+
+	createResponse(ResponseType::ClientInfo, true, std::move(message));
+}
+
+void Session::handleCancelRequest(const nlohmann::json& message)
+{
+	nlohmann::json response;
+	bool status = false;
+
+	int64_t price = message["Price"];
+	int64_t volume = message["Volume"];
+	TradeRequestType tradeType = message["Type"];
+	boost::posix_time::ptime regTime 
+		= boost::posix_time::from_iso_extended_string(message["RegTime"].get<std::string>());
+
+	TradeRequest reqToDelete(clientID, volume, price, regTime, tradeType);
+	status = Marketplace::instance().cancelTradeRequest(reqToDelete);
+
+	if (status) {
+		response["Info"] = "Request successfully canceled";
+	}
+	else {
+		response["Info"] = "Request not found (already completed or deleted)";
+	}
+
+	createResponse(ResponseType::CancelInfo, status, std::move(response));
+}
+
+
+void Session::createResponse(ResponseType type, bool status, nlohmann::json&& message)
+{
+	nlohmann::json response;
+
+	response["ResponseType"] = type;
+	response["Status"] = status;
+	response.emplace("Message", std::move(message));
+
 	reply = response.dump();
+	reply.push_back('\n'); //delimeter for messages
 }

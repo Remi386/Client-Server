@@ -2,7 +2,7 @@
 #include <set>
 #include <list>
 #include <unordered_map>
-#include "TradeRequest.h"
+#include "../NetCommon/TradeRequest.h"
 #include <memory>
 
 class Session;
@@ -46,11 +46,13 @@ public:
 			activeSessions.erase(userID);
 	}
 
+	bool cancelTradeRequest(const TradeRequest& req);
+
 private:
 
-	void addRequest(TradeRequest& req, TradeRequest::Type reqType);
+	void addRequest(TradeRequest& req, TradeRequestType reqType);
 
-	void removeRequest(const TradeRequest& req, TradeRequest::Type reqType);
+	void removeRequest(const TradeRequest& req, TradeRequestType reqType);
 
 	Marketplace() = default;
 

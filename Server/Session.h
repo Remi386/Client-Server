@@ -49,15 +49,18 @@ private:
 
 	void handleSignIn(const nlohmann::json& message);
 
-	void handleTradeRequest(int64_t userID, RequestType type, 
-							const nlohmann::json& message);
+	void handleTradeRequest(const nlohmann::json& message);
 
-	void handleInfoRequest(int64_t userID);
+	void handleInfoRequest();
+
+	void handleCancelRequest(const nlohmann::json& message);
 
 	/// <summary>
 	/// This method called when user gets his ID, after signing up/in
 	/// </summary>
 	void addSessionToActive();
+
+	void createResponse(ResponseType type, bool status, nlohmann::json&& message);
 
 private:
 	//We should keep reply buffer valid, so we will store data in string

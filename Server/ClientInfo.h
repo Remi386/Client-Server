@@ -1,21 +1,21 @@
 #pragma once
 #include <cstdint>
 #include <tuple>
-#include "TradeRequest.h"
+#include "../NetCommon/NetCommon.h"
 
 class ClientInfo {
 public:
 
-	void applyBalanceChanges(int64_t dollChange, int64_t rubChange, TradeRequest::Type type)
+	void applyBalanceChanges(int64_t dollChange, int64_t rubChange, TradeRequestType type)
 	{
 		switch (type)
 		{
-		case TradeRequest::Type::Buy:
+		case TradeRequestType::Buy:
 			dollars += dollChange;
 			rubles -= rubChange;
 			break;
 
-		case TradeRequest::Type::Sell:
+		case TradeRequestType::Sell:
 			dollars -= dollChange;
 			rubles += rubChange;
 			break;
