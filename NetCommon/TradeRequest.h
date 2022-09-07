@@ -103,12 +103,13 @@ public:
 		if (lhs.getPrice() != rhs.getPrice()) {
 			return lhs.getPrice() < rhs.getPrice();
 		}
-		else if (lhs.getRegistrationTime() != rhs.getRegistrationTime()) {
-			lhs.getRegistrationTime() < rhs.getRegistrationTime();
+		else //if (lhs.getRegistrationTime() != rhs.getRegistrationTime())
+		{
+			return lhs.getRegistrationTime() < rhs.getRegistrationTime();
 		}
-		else {
-			return lhs.getOwner() < rhs.getOwner();
-		}
+		//else {
+		//	return lhs.getOwner() < rhs.getOwner();
+		//}
 	}
 };
 
@@ -121,11 +122,12 @@ public:
 		if (lhs.getPrice() != rhs.getPrice()) {
 			return lhs.getPrice() > rhs.getPrice();
 		}
-		else if (lhs.getRegistrationTime() != rhs.getRegistrationTime()) {
-			lhs.getRegistrationTime() < rhs.getRegistrationTime();
+		else //if (lhs.getRegistrationTime() != rhs.getRegistrationTime())
+		{
+			return lhs.getRegistrationTime() < rhs.getRegistrationTime();
 		}
-		else {
-			return lhs.getOwner() < rhs.getOwner();
-		}
+		//else {
+		//	return lhs.getOwner() < rhs.getOwner();
+		//}
 	}
 };

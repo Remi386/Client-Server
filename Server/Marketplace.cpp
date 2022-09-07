@@ -13,7 +13,7 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 		int64_t firstUserID = tradeRequest.getOwner();
 
 		if (oppositeContainer.empty()) {
-			addRequest(tradeRequest, firstRequestType);
+			addRequest(tradeRequest);
 		}
 		else {
 			auto iter = oppositeContainer.begin();
@@ -26,8 +26,6 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 				//tradeVolume - dollars to buy/sell
 				int64_t tradeVolume = std::min(iter->getVolume(), tradeRequest.getVolume());
 				int64_t rublesVolume = tradeVolume * iter->getPrice();
-
-				auto& db = DataBase::instance();
 
 				//If two requests not from one user
 				if (firstUserID != secondUserID) { 
@@ -58,15 +56,28 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 					}
 
 					//Add trade to history
-					db.addCompletedTradeRequest(firstUserID, firstTrade);
-					db.addCompletedTradeRequest(secondUserID, secondTrade);
+					database.addCompletedTradeRequest(firstUserID, firstTrade);
+					database.addCompletedTradeRequest(secondUserID, secondTrade);
 
-					//change users balance
-					db.getClientInfo(firstUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-						firstRequestType);
+					//update first user balance
+					if (auto firstUserInfo = database.getClientInfo(firstUserID)) 
+					{
+						firstUserInfo->applyBalanceChanges(tradeVolume,
+														   rublesVolume,
+														   firstRequestType);
 
-					db.getClientInfo(secondUserID).applyBalanceChanges(tradeVolume, rublesVolume,
-						secondRequestType);
+						database.updateClientInfo(firstUserID, *firstUserInfo);
+					}
+
+					//update second user balance
+					if (auto secondUserInfo = database.getClientInfo(secondUserID))
+					{
+						secondUserInfo->applyBalanceChanges(tradeVolume,
+							rublesVolume,
+							secondRequestType);
+
+						database.updateClientInfo(secondUserID, *secondUserInfo);
+					}
 
 				}
 				//Apply chages to trade request for further condition checks
@@ -76,7 +87,7 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 				//Remove request from active if it is satisfied
 				if (iter->isCompleted()) {
 					//send iterator copy to erase, then increment it
-					removeRequest(*(iter++), secondRequestType);
+					removeRequest(*(iter++));
 				}
 				else {
 					++iter;
@@ -85,7 +96,7 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 
 			//If main request is not satisfied - add it to active
 			if (!tradeRequest.isCompleted()) {
-				addRequest(tradeRequest, firstRequestType);
+				addRequest(tradeRequest);
 			}
 		} //else
 	};
@@ -103,11 +114,11 @@ void Marketplace::handleTradeRequest(TradeRequest& tradeRequest_)
 	}
 }
 
-void Marketplace::addRequest(TradeRequest& req, TradeRequestType reqType)
+void Marketplace::addRequest(TradeRequest& req)
 {
 	const TradeRequest* insertedValue;
 
-	switch (reqType)
+	switch (req.getType())
 	{
 	case TradeRequestType::Buy:
 		insertedValue = &(*(buyRequests.insert(req)));
@@ -120,21 +131,36 @@ void Marketplace::addRequest(TradeRequest& req, TradeRequestType reqType)
 	activeRequests[req.getOwner()].push_back(insertedValue);
 }
 
-void Marketplace::removeRequest(const TradeRequest& req, TradeRequestType reqType)
+bool Marketplace::removeRequest(const TradeRequest& req)
 {
+	//Get active request by ID
+	auto client = activeRequests.find(req.getOwner());
 
-	listOfRequests& clientRequests = activeRequests.at(req.getOwner());
-	auto iter = std::find(clientRequests.begin(), clientRequests.end(), &req);
+	if (client == activeRequests.end()) //Client doesnt have any requests
+		return false;
+	
+	listOfRequests& clientRequests = client->second;
 
-	if (iter != clientRequests.end()) {
-		clientRequests.erase(iter);
+	//Find request we want to remove
+	auto iter = std::find_if(clientRequests.begin(), clientRequests.end(),
+		[&](const TradeRequest* clientRequest)
+		{
+			return req.getPrice() == clientRequest->getPrice()
+				&& req.getRegistrationTime() == clientRequest->getRegistrationTime();
+		});
+
+	if (iter == clientRequests.end()) {
+		return false; //Request no found
 	}
+
+	clientRequests.erase(iter);
 
 	if (clientRequests.empty()) { //If client no longer have requests
 		activeRequests.erase(req.getOwner());
 	}
 
-	switch (reqType)
+	//Remove request from buy/sell container
+	switch (req.getType())
 	{
 	case TradeRequestType::Buy:
 	{
@@ -142,7 +168,7 @@ void Marketplace::removeRequest(const TradeRequest& req, TradeRequestType reqTyp
 
 		if (iter != buyRequests.end()) {
 			buyRequests.erase(iter);
-			break;
+			return true;
 		}
 	}
 	case TradeRequestType::Sell:
@@ -151,11 +177,12 @@ void Marketplace::removeRequest(const TradeRequest& req, TradeRequestType reqTyp
 
 		if (iter != sellRequests.end()) {
 			sellRequests.erase(iter);
-			break;
+			return true;
 		}
 	}
-		break;
-	}
+	} //switch
+
+	return false;
 }
 
 const Marketplace::listOfRequests& 
@@ -170,57 +197,4 @@ const Marketplace::listOfRequests&
 										   //care about object lifetime
 		return empty;
 	}
-}
-
-bool Marketplace::cancelTradeRequest(const TradeRequest& req)
-{
-	auto client = activeRequests.find(req.getOwner());
-
-	if (client == activeRequests.end())
-		return false;
-
-	listOfRequests& clientRequests = client->second;
-
-	auto iter = std::find_if(clientRequests.begin(), clientRequests.end(),
-		[&](const TradeRequest* clientRequest) 
-		{
-			return req.getPrice() == clientRequest->getPrice()
-				&& req.getRegistrationTime() == clientRequest->getRegistrationTime();
-		});
-
-	if (iter == clientRequests.end()) {
-		return false;
-	}
-
-	clientRequests.erase(iter);
-
-	if (clientRequests.empty()) { //If client no longer have requests
-		activeRequests.erase(req.getOwner());
-	}
-
-	switch (req.getType())
-	{
-	case TradeRequestType::Buy:
-	{
-		auto iter = buyRequests.find(req);
-
-		if (iter != buyRequests.end()) {
-			buyRequests.erase(iter);
-			break;
-		}
-		return false;
-	}
-	case TradeRequestType::Sell:
-	{
-		auto iter = sellRequests.find(req);
-
-		if (iter != sellRequests.end()) {
-			sellRequests.erase(iter);
-			break;
-		}
-		return false;
-	}
-	}
-
-	return true;
 }

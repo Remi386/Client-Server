@@ -15,42 +15,42 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="Source.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Session.cpp">
+    <ClCompile Include="TradeRequestTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Marketplace.cpp">
+    <ClCompile Include="CompletedTradeRequestTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CompletedTradeRequest.cpp">
+    <ClCompile Include="ClientInfoTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DataBase.cpp">
+    <ClCompile Include="DataBaseTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Server.cpp">
+    <ClCompile Include="MarketplaceTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SessionTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Session.h">
+    <ClInclude Include="TradeRequestTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Marketplace.h">
+    <ClInclude Include="CompletedTradeRequestTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ClientInfo.h">
+    <ClInclude Include="DataBaseTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DataBase.h">
+    <ClInclude Include="MarketplaceTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CompletedTradeRequest.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Server.h">
+    <ClInclude Include="SessionTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

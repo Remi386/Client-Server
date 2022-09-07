@@ -133,6 +133,11 @@ void Client::loop()
 
 void Client::handleRegistrationRequest(RequestType type)
 {
+    if (clientID >= 0) {
+        std::cout << "You are already registered" << std::endl;
+        return;
+    }
+
     nlohmann::json message;
     std::string login, password;
 
@@ -164,9 +169,11 @@ void Client::handleCancelRequest()
 
     while (true) {
         std::cout << "Enter index of request to remove (count from 1): ";
+        
         std::cin >> index;
-
-        if (index - 1 >= 0 && index < clientRequests.size()) {
+        index -= 1;
+        
+        if (index >= 0 && index < clientRequests.size()) {
             break;
         }
 
@@ -177,6 +184,8 @@ void Client::handleCancelRequest()
     std::advance(iter, index);
 
     nlohmann::json request = iter->createJsonObject();;
+    
+    clientRequests.erase(iter);
     
     sendMessage(RequestType::CancelRequest, request);
 }
@@ -202,7 +211,7 @@ void Client::handleGetInfoResponse(bool status, const nlohmann::json& message)
 
         if (activeRequest.empty())
         {
-            std::cout << "\No active requests!\n";
+            std::cout << "\nNo active requests!\n";
         }
         else {
             std::cout << "\nYour active requests: \n";
@@ -224,7 +233,7 @@ void Client::handleGetInfoResponse(bool status, const nlohmann::json& message)
                           << price << " rubles price. Published on "
                           << local_adj::utc_to_local(regTime) << std::endl;
 
-
+                //Add active request to cache, to make possible cancel it
                 clientRequests.push_back(TradeRequest(clientID, volume, price, 
                                                       regTime, type));
 
@@ -336,4 +345,3 @@ void Client::handleResponse(const nlohmann::json& response)
         break;
     }
 }
-

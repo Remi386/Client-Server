@@ -6,6 +6,10 @@
 class ClientInfo {
 public:
 
+	explicit ClientInfo(int64_t dollars_ = 0, int64_t rubles_ = 0)
+		:dollars(dollars_), rubles(rubles_)
+	{}
+
 	void applyBalanceChanges(int64_t dollChange, int64_t rubChange, TradeRequestType type)
 	{
 		switch (type)
@@ -19,12 +23,12 @@ public:
 			dollars -= dollChange;
 			rubles += rubChange;
 			break;
-
-		default:
-			break;
 		}
-		
 	}
+
+	int64_t getDollars() const { return dollars; }
+
+	int64_t getRubles() const { return rubles; }
 
 	std::tuple<int64_t, int64_t> getBalance() const
 	{

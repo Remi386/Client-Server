@@ -6,22 +6,19 @@
 #include "CompletedTradeRequest.h"
 #include <utility>
 #include <memory>
+#include <optional>
 
 class Session;
 
 class DataBase {
 public:
 
+	DataBase() = default;
+
 	DataBase(const DataBase&) = delete;
 	DataBase(DataBase&&) = delete;
 	void operator=(const DataBase&) = delete;
 	void operator=(DataBase&&) = delete;
-
-	static DataBase& instance() 
-	{
-		static DataBase db;
-		return db;
-	}
 
 	/// <summary>
 	/// Register new user in database
@@ -39,25 +36,52 @@ public:
 	/// passwords mismatch </returns>
 	int64_t getUserID(const std::string& login, const std::string& password) const;
 
-	ClientInfo& getClientInfo(int64_t clientID)
+	/// <summary>
+	/// Get client's balance information.
+	/// </summary>
+	/// <param name="clientID"></param>
+	/// <returns>If user doesnt exist, return null optional object</returns>
+	std::optional<ClientInfo> getClientInfo(int64_t clientID)
 	{
-		return clientsInfo[clientID];
+		if(clientsInfo.find(clientID) != clientsInfo.end())
+			return clientsInfo[clientID];
+
+		return std::nullopt;
 	}
 
+	/// <summary>
+	/// Updates client's balance. Does nothing, if user doesn't exist
+	/// </summary>
+	/// <param name="clientID"></param>
+	/// <param name="newInfo"></param>
+	void updateClientInfo(int64_t clientID, const ClientInfo& newInfo)
+	{
+		if (clientsInfo.find(clientID) != clientsInfo.end())
+			clientsInfo[clientID] = newInfo;
+	}
+
+	/// <summary>
+	/// Get client's trade history by ID
+	/// </summary>
+	/// <param name="clientID"></param>
+	/// <returns> List of completed requests, which can be empty </returns>
 	const std::list<CompletedTradeRequest>& 
 		getClientTradeHistory(int64_t clientID) 
 	{
 		return tradeHistory[clientID];
 	}
 
+	/// <summary>
+	/// Write trade request completion to history
+	/// </summary>
+	/// <param name="clientID"></param>
+	/// <param name="request"></param>
 	void addCompletedTradeRequest(int64_t clientID, const CompletedTradeRequest& request)
 	{
 		tradeHistory[clientID].push_back(request);
 	}
 
 private:
-	DataBase() = default;
-
 	std::unordered_map<std::string, int64_t> login2ID;
 	std::unordered_map<int64_t, std::string> ID2Password;
 
