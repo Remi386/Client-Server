@@ -1,6 +1,6 @@
 #include "Session.h"
 #include <iostream>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include "../NetCommon/TradeRequest.h"
 #include "../NetCommon/NetCommon.h"
 #include "Marketplace.h"

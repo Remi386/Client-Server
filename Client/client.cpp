@@ -3,7 +3,7 @@
 #include <iomanip>
 #include "../NetCommon/NetCommon.h"
 #include "Secure.h"
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/date_time.hpp>
 #include <boost/date_time/c_local_time_adjustor.hpp>
 
@@ -20,6 +20,12 @@ Client::Client()
 : context(), sock(context)
 {
    
+}
+
+Client::~Client()
+{
+    context.stop();
+    clientThread.join();
 }
 
 void Client::connect(const std::string& adress, const std::string& port)

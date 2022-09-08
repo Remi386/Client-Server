@@ -82,6 +82,8 @@ public:
 	}
 
 private:
+	//std::unique_ptr<pqxx::connection> connection;
+
 	std::unordered_map<std::string, int64_t> login2ID;
 	std::unordered_map<int64_t, std::string> ID2Password;
 

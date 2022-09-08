@@ -11,6 +11,8 @@ class Client {
 public:
 	Client();
 
+	~Client();
+
 	void connect(const std::string& adress, const std::string& port);
 
 	void loop();
