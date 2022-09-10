@@ -10,7 +10,7 @@ int main()
 {
     try
     {
-        DataBase database;
+        DataBase database("testtaskdatabase");
         Marketplace market(database);
 
         boost::asio::io_context context;

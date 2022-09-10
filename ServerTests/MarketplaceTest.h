@@ -1,21 +1,20 @@
 #pragma once
 #include <gtest/gtest.h>
 #include "../Server/Marketplace.h"
-#include "../Server/DataBase.h"
+#include "TestEnvironment.h"
 
 class MarketplaceTest : public testing::Test {
 protected:
 
 	virtual void SetUp() override
 	{
-		database = new DataBase();
+		database = TestEnvironment::getDataBase();
 		market = new Marketplace(*database);
 	}
 
 	virtual void TearDown() override
 	{
 		delete market;
-		delete database;
 	}
 
 	bool isTradeEqual(const TradeRequest& lhs, const TradeRequest& rhs)

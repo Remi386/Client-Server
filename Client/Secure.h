@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <openssl/sha.h>
+//#include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <algorithm>
 #include <sstream>
@@ -36,16 +37,17 @@ namespace secure {
 	/// Calculates SHA256 for given password
 	/// </summary>
 	/// <param name="rowPassword"></param>
-	/// <returns></returns>
+	/// <returns>Returns encrypted password or empty string ob failure</returns>
 	std::string hashPassword(const std::string& rowPassword) 
 	{
 		ustring convertedPassword;
+
 		convertedPassword.resize(SHA256_DIGEST_LENGTH);
-		
-		//Call SHA256 algorithm with no salt bytes, 1030 iterations
-		int status = PKCS5_PBKDF2_HMAC(rowPassword.c_str(), rowPassword.size(), 
-									   nullptr, 0, 1030, EVP_sha256(), 
-									   SHA256_DIGEST_LENGTH, convertedPassword.data());
+
+		//Call SHA256 algorithm with no salt bytes and 7030 iterations
+		int status = PKCS5_PBKDF2_HMAC(rowPassword.c_str(), rowPassword.size(),
+								   nullptr, 0, 7030, EVP_sha256(),
+								   SHA256_DIGEST_LENGTH, convertedPassword.data());
 
 		return status ? bin_to_hex(convertedPassword.c_str(), SHA256_DIGEST_LENGTH) 
 					  : std::string();

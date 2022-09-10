@@ -27,3 +27,14 @@ nlohmann::json CompletedTradeRequest::createJsonObject() const
 
 	return object;
 }
+
+std::string CompletedTradeRequest::getTypeString() const 
+{
+	switch (type)
+	{
+	case TradeRequestType::Buy:
+		return std::string("Buy");
+	case TradeRequestType::Sell:
+		return std::string("Sell");
+	}
+}

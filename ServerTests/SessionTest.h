@@ -1,7 +1,7 @@
 #pragma once
 #include <gtest/gtest.h>
 #include "../Server/Session.h"
-#include "../Server/DataBase.h"
+#include "TestEnvironment.h"
 #include "../Server/Marketplace.h"
 
 class SessionTest : public testing::Test {
@@ -9,7 +9,8 @@ protected:
 
 	virtual void SetUp() override
 	{
-		database = new DataBase();
+		database = TestEnvironment::getDataBase();
+
 		market = new Marketplace(*database);
 		session = std::make_shared<Session>(context, *market, *database);
 	}
@@ -18,7 +19,7 @@ protected:
 	{
 		session.~shared_ptr();
 		delete market;
-		delete database;
+		database->clearTables();
 	}
 
 	nlohmann::json createRequest(RequestType type, int64_t userID,
@@ -47,6 +48,6 @@ protected:
 	
 	std::shared_ptr<Session> session;
 	boost::asio::io_context context;
-	DataBase* database;
 	Marketplace* market;
+	DataBase* database;
 };

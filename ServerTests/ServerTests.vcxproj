@@ -148,6 +148,7 @@
     <ClInclude Include="DataBaseTest.h" />
     <ClInclude Include="MarketplaceTest.h" />
     <ClInclude Include="SessionTest.h" />
+    <ClInclude Include="TestEnvironment.h" />
     <ClInclude Include="TradeRequestTest.h" />
   </ItemGroup>
   <ItemGroup>

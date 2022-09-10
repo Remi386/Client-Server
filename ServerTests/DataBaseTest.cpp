@@ -3,10 +3,10 @@
 TEST_F(DataBaseTest, RegisterNewUserTest)
 {
 	int64_t userID1 = database->registerNewUser("user1", "pass1");
-	EXPECT_EQ(userID1, 0) << "Incorrect start ID";
+	EXPECT_GT(userID1, 0) << "Incorrect start ID";
 
 	int64_t userID2 = database->registerNewUser("user2", "pass2");
-	EXPECT_EQ(userID2, 1) << "Incorrect ID incrementation";
+	EXPECT_EQ(userID2, userID1 + 1) << "Incorrect ID incrementation";
 
 	int64_t userID3 = database->registerNewUser("user1", "pass3");
 	EXPECT_EQ(userID3, -1) << "Incorrect handle of taken login";
@@ -105,23 +105,27 @@ TEST_F(DataBaseTest, UpdateClientInfoTest)
 TEST_F(DataBaseTest, GetClientTradeHistoryTest)
 {
 	//Get trade history of user with ID = 50
-	auto& clientHistory1 = database->getClientTradeHistory(50);
+	auto clientHistory1 = database->getClientTradeHistory(50);
 
 	EXPECT_TRUE(clientHistory1.empty()) << "Failed to get empty history";
+
+	//Register new users
+	int64_t userID = database->registerNewUser("TradeHistoryUser1", "pass1");
+	int64_t firstReqPatnerID = database->registerNewUser("TradeHistoryUser2", "pass1");;
+	int64_t secondReqPatnerID = database->registerNewUser("TradeHistoryUser3", "pass1");;
 
 	using boost::posix_time::ptime;
 	using boost::posix_time::second_clock;
 
+	//Fill his history
 	ptime firstReqCreationTime = second_clock::universal_time();
 	int64_t firstReqVolume = 50;
 	int64_t firstReqPrice = 45;
-	int64_t firstReqPatnerID = 67;
 	TradeRequestType firstReqType = TradeRequestType::Buy;
 
 	ptime secondReqCreationTime = firstReqCreationTime + boost::posix_time::seconds(500);
 	int64_t secondReqVolume = 300;
 	int64_t secondReqPrice = 89;
-	int64_t secondReqPatnerID = 98;
 	TradeRequestType secondReqType = TradeRequestType::Sell;
 
 	//Create info about completed trade requests
@@ -136,12 +140,12 @@ TEST_F(DataBaseTest, GetClientTradeHistoryTest)
 	ptime firstReqCompletionTime = req1.getComletionTime();
 	ptime secondReqCompletionTime = req2.getComletionTime();
 
-	//Add it to user with 0 ID
-	database->addCompletedTradeRequest(0, req1);
-	database->addCompletedTradeRequest(0, req2);
+	//Add it to user 
+	database->addCompletedTradeRequest(userID, req1);
+	database->addCompletedTradeRequest(userID, req2);
 
 	//Run transaction to database
-	auto& clientHistory = database->getClientTradeHistory(0);
+	auto clientHistory = database->getClientTradeHistory(userID);
 	
 	ASSERT_EQ(clientHistory.size(), 2) << "Some of the request missing or there are extra of them";
 

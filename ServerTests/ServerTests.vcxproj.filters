@@ -53,5 +53,8 @@
     <ClInclude Include="SessionTest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TestEnvironment.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

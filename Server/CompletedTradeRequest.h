@@ -19,6 +19,19 @@ public:
 		type(type_)
 	{}
 
+	CompletedTradeRequest(int64_t volume_, int64_t price_,
+		int64_t otherUserID_,
+		const boost::posix_time::ptime& registrationTime,
+		const boost::posix_time::ptime& completionTime,
+		TradeRequestType type_)
+		: volume(volume_),
+		price(price_),
+		otherUserID(otherUserID_),
+		timeOfRegistration(registrationTime),
+		timeOfCompletion(completionTime),
+		type(type_)
+	{}
+
 	int64_t getVolume() const { return volume; }
 
 	int64_t getPrice() const { return price; }
@@ -26,6 +39,8 @@ public:
 	int64_t getOtherUserID() const { return otherUserID; }
 
 	TradeRequestType getType() const { return type; }
+
+	std::string getTypeString() const;
 
 	std::string toString() const;
 
@@ -37,6 +52,16 @@ public:
 	const boost::posix_time::ptime& getComletionTime() const
 	{
 		return timeOfCompletion;
+	}
+
+	std::string getRegistrationTimeString() const
+	{
+		return boost::posix_time::to_iso_extended_string(timeOfRegistration);
+	}
+
+	std::string getComletionTimeString() const
+	{
+		return boost::posix_time::to_iso_extended_string(timeOfCompletion);
 	}
 
 	nlohmann::json createJsonObject() const;

@@ -7,13 +7,14 @@
 #include <utility>
 #include <memory>
 #include <optional>
+#include <pqxx/pqxx>
 
 class Session;
 
 class DataBase {
 public:
 
-	DataBase() = default;
+	DataBase(const std::string& name);
 
 	DataBase(const DataBase&) = delete;
 	DataBase(DataBase&&) = delete;
@@ -41,52 +42,39 @@ public:
 	/// </summary>
 	/// <param name="clientID"></param>
 	/// <returns>If user doesnt exist, return null optional object</returns>
-	std::optional<ClientInfo> getClientInfo(int64_t clientID)
-	{
-		if(clientsInfo.find(clientID) != clientsInfo.end())
-			return clientsInfo[clientID];
-
-		return std::nullopt;
-	}
+	std::optional<ClientInfo> getClientInfo(int64_t clientID);
 
 	/// <summary>
 	/// Updates client's balance. Does nothing, if user doesn't exist
 	/// </summary>
 	/// <param name="clientID"></param>
 	/// <param name="newInfo"></param>
-	void updateClientInfo(int64_t clientID, const ClientInfo& newInfo)
-	{
-		if (clientsInfo.find(clientID) != clientsInfo.end())
-			clientsInfo[clientID] = newInfo;
-	}
+	void updateClientInfo(int64_t clientID, const ClientInfo& newInfo);
 
 	/// <summary>
 	/// Get client's trade history by ID
 	/// </summary>
 	/// <param name="clientID"></param>
 	/// <returns> List of completed requests, which can be empty </returns>
-	const std::list<CompletedTradeRequest>& 
-		getClientTradeHistory(int64_t clientID) 
-	{
-		return tradeHistory[clientID];
-	}
+	std::list<CompletedTradeRequest> getClientTradeHistory(int64_t clientID);
 
 	/// <summary>
 	/// Write trade request completion to history
 	/// </summary>
 	/// <param name="clientID"></param>
 	/// <param name="request"></param>
-	void addCompletedTradeRequest(int64_t clientID, const CompletedTradeRequest& request)
-	{
-		tradeHistory[clientID].push_back(request);
-	}
+	void addCompletedTradeRequest(int64_t clientID, const CompletedTradeRequest& request);
+
+
+	void clearTables();
 
 private:
-	//std::unique_ptr<pqxx::connection> connection;
 
-	std::unordered_map<std::string, int64_t> login2ID;
-	std::unordered_map<int64_t, std::string> ID2Password;
+	void createDatabase(const std::string& dbname, const std::string& user,
+						const std::string& password);
 
-	std::unordered_map<int64_t, ClientInfo> clientsInfo;
-	std::unordered_map<int64_t, std::list<CompletedTradeRequest>> tradeHistory;
+private:
+
+	std::unique_ptr<pqxx::connection> connection;
+
 };

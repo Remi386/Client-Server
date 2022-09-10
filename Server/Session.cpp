@@ -291,7 +291,7 @@ nlohmann::json Session::handleInfoRequest()
 	}
 
 	//Construct user's trade history
-	auto& requestsHistory = database.getClientTradeHistory(clientID);
+	auto requestsHistory = database.getClientTradeHistory(clientID);
 
 	if (!requestsHistory.empty()) {
 		for (auto& request : requestsHistory) {

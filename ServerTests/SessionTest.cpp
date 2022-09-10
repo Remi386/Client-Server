@@ -174,8 +174,11 @@ TEST_F(SessionTest, HandleGetInfoRequestTest)
 
 	int64_t userID = response["Message"]["UserID"];
 
+	//We need partner to be registered in database
+	int64_t partnerID = database->registerNewUser("GetInfoRequestUser", "somePass");
+
 	//Fill some data
-	CompletedTradeRequest compReq(30, 40, 12, 
+	CompletedTradeRequest compReq(30, 40, partnerID,
 		boost::posix_time::second_clock::universal_time(), 
 		TradeRequestType::Buy);
 
