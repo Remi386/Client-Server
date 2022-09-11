@@ -1,7 +1,7 @@
 #include "../NetCommon/NetCommon.h"
 #include <iostream>
-#include "Server.h"
 #include "DataBase.h"
+#include "Server.h"
 #include "Marketplace.h"
 
 using boost::asio::ip::tcp;

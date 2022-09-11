@@ -7,7 +7,9 @@
 #include <utility>
 #include <memory>
 #include <optional>
-#include <pqxx/pqxx>
+namespace pqxx {
+	class connection;
+}
 
 class Session;
 
@@ -15,6 +17,8 @@ class DataBase {
 public:
 
 	DataBase(const std::string& name);
+
+	~DataBase(); //Needed for forward declaration of "connection" class
 
 	DataBase(const DataBase&) = delete;
 	DataBase(DataBase&&) = delete;

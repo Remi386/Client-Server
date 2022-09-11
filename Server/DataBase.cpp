@@ -1,7 +1,9 @@
 #include "DataBase.h"
 #include <pqxx/pqxx>
 
-//"user=postgres password=postgre host=localhost port=5432 dbname=template1 "
+DataBase::~DataBase() = default;
+
+
 DataBase::DataBase(const std::string& dbname)
 {	
 	bool connected = false;
@@ -13,8 +15,7 @@ DataBase::DataBase(const std::string& dbname)
 
 	while (!connected) {
 
-		std::string options = "host=localhost "
-							  "port=5432 "
+		std::string options = "port=5432 "
 							  "dbname=" + databasename +
 							  " connect_timeout=10 " +
 							  user + " "
@@ -42,40 +43,61 @@ DataBase::DataBase(const std::string& dbname)
 				std::cin >> password;
 				password = "password=" + password;
 			}
-			else if (errorMessage.find("authentication failed for user") != std::string::npos) {
-				std::cout << "Authentication failed!\n";
-
-				std::string input;
-				do {
-					std::cout << "Do you want to enter password "
-						"again or switch user to postgres?\n"
-						"(type 'again' or 'switch'): ";
-
-					std::cin >> input;
-				} while (input != "again" && input != "switch");
-
-				if (input == "again") {
-					std::cout << "Please, enter password for your user in PostgreSQL: ";
-					std::cin >> password;
-					password = "password=" + password;
-
-				}
-				else {
-					std::cout << "Please, enter password for user postgres (or leave it empty): ";
-					std::cin >> password;
-					
-					if(!password.empty())
-						password = "password=" + password;
-
-					user = "user=postgres";
-				}
-			}
 			else if (errorMessage.find("database \"" + dbname + "\" does not exist") != std::string::npos)
 			{
-				std::cout << "Database " << dbname << " not found, switching to template1" << std::endl;
+				std::cout << "Database " << dbname << " not found, "
+					"temporary switching to template1 to create it" << std::endl;
+
 				databasename = "template1";
 				createDB = true;
 			}
+			else if (errorMessage.find("role") != std::string::npos 
+				  && errorMessage.find("does not exist") != std::string::npos)
+			{
+				std::cout << "Your user have no role in postgreSQL, switching to postgres" << std::endl;
+				user = "user=postgres";
+				password.clear();
+			}
+			else {
+				size_t index  = errorMessage.find("authentication failed for user");
+
+				if (index != std::string::npos){
+					
+					auto endPos = std::find(errorMessage.begin() + index + 31, 
+											  errorMessage.end(), ' ');
+
+					std::cout << "Authentication failed for user " 
+							  << std::string(errorMessage.begin() + index + 31, endPos) << std::endl;
+
+					std::string input;
+					do {
+						std::cout << "Do you want to enter password "
+							"again or switch user to postgres?\n"
+							"(type 'again' or 'switch'): ";
+
+						std::cin >> input;
+
+					} while (input != "again" && input != "switch");
+
+					if (input == "again") {
+						std::cout << "Please, enter password for your user in PostgreSQL: ";
+						
+						std::cin >> std::noskipws >> password >> std::skipws;
+						password = "password=" + password;
+					}
+					else {
+						std::cout << "Please, enter password for user postgres (or leave it empty): ";
+						
+						std::cin >> std::noskipws >> password >> std::skipws;
+						
+						if(!password.empty()) 
+							password = "password=" + password;
+
+						user = "user=postgres";
+					}
+				} 
+			}
+			
 		}
 		catch (const std::exception& e) {
 			std::cout << "Exception: " << e.what() << std::endl;
@@ -87,8 +109,6 @@ void DataBase::createDatabase(const std::string& dbname,
 	const std::string& user,
 	const std::string& password)
 {
-	try {
-
 		{ //Create New DataBase
 			pqxx::nontransaction query(*connection);
 			auto reselt = query.exec("CREATE DATABASE " + dbname);
@@ -97,7 +117,7 @@ void DataBase::createDatabase(const std::string& dbname,
 
 		connection->close();
 
-		std::string options = "host=localhost "
+		std::string options =
 			"port=5432 "
 			"dbname=" + dbname +
 			" connect_timeout=10 " +
@@ -128,19 +148,6 @@ void DataBase::createDatabase(const std::string& dbname,
 			"CompTime varchar(20) NOT NULL,"
 			"Type varchar(4) NOT NULL)"
 		);
-	}
-	catch (pqxx::sql_error& e) {
-		std::string sqlErrCode = e.sqlstate();
-		if (sqlErrCode == "42P04") { // catch duplicate_database
-			std::cout << "Database: " << dbname << " exists, proceeding further\n";
-			return;
-		}
-		throw;
-	}
-	catch (const std::exception& e) {
-		std::cout << "Exepction: " << e.what() << std::endl;
-		throw;
-	}
 }
 
 int64_t DataBase::registerNewUser(const std::string& login, const std::string& password)

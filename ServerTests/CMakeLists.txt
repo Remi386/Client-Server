@@ -8,6 +8,8 @@ add_executable(${ServerTestName}
     Source.cpp
 )
 
+add_dependencies(${ServerTestName} ${ServerName})
+
 #Getting google test sources
 include(FetchContent)
 

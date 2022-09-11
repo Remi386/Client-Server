@@ -33,6 +33,7 @@ private:
 
 	void handleGetInfoResponse(bool status, const nlohmann::json& message);
 
+private:
 	std::thread clientThread;
 	boost::asio::io_context context;
 	boost::asio::ip::tcp::socket sock;

@@ -37,4 +37,6 @@ std::string CompletedTradeRequest::getTypeString() const
 	case TradeRequestType::Sell:
 		return std::string("Sell");
 	}
+
+	return std::string();
 }
